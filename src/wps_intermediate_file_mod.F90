@@ -93,36 +93,32 @@ contains
 
   end function constructor_from_path
 
-  subroutine open_wps_file(self, status)
+  subroutine open_wps_file(self)
 
     implicit none
 
     class(wps_intermediate_file_t), intent(in) :: self
-    integer, intent(out), optional             :: status
 
-    integer                                    :: status_
+    integer                                    :: status
 
-    open(unit=IUNIT, file=trim(self%file), form='unformatted', status='unknown', iostat=status_)
-    if (present(status)) status = status_
-    if (status_ /= 0) then
+    open(unit=IUNIT, file=trim(self%file), form='unformatted', status='unknown', iostat=status)
+    if (status /= 0) then
       write(*, *) 'ERROR: can not open WPS intermediate format file!'
       return
     end if
 
   end subroutine open_wps_file
 
-  subroutine close_wps_file(self, status)
+  subroutine close_wps_file(self)
 
     implicit none
 
     class(wps_intermediate_file_t), intent(in) :: self
-    integer, intent(out), optional             :: status
 
-    integer                                    :: status_
+    integer                                    :: status
 
-    close(unit=IUNIT, iostat=status_)
-    if (present(status)) status = status_
-    if (status_ /= 0) then
+    close(unit=IUNIT, iostat=status)
+    if (status /= 0) then
       write(*, *) 'ERROR: can not close WPS intermediate format file!'
       return
     end if

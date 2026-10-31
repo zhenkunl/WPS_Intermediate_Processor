@@ -4,9 +4,8 @@ program test
 
     type(wps_intermediate_file_t)  :: wps_file
     ! type(wps_intermediate_field_t) :: wps_field
-    integer                        :: status
 
-    wps_file = wps_intermediate_file_t('/home/zhenkun/work/pgi/WPS-4.2', 2025, 10, 27, 13, 30)
+    wps_file = wps_intermediate_file_t('examples', 2013, 08, 11, 00)
     call wps_file%open()
     call wps_file%read()
     write(*, *) 'successfully read WPS intermediate format file.'

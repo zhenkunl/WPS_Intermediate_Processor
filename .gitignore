@@ -27,3 +27,6 @@
 
 # CMake dir
 build
+
+# Temporary files
+tmp
