@@ -1,14 +1,12 @@
 program test
-    use wps_intermediate_processor
+    use wpsim_io
     implicit none
 
-    type(wps_intermediate_file_t)  :: wps_file
-    ! type(wps_intermediate_field_t) :: wps_field
+    type(wpsim_file) :: im_file
 
-    wps_file = wps_intermediate_file_t('examples', 2013, 08, 11, 00)
-    call wps_file%open()
-    call wps_file%read()
-    write(*, *) 'successfully read WPS intermediate format file.'
-    call wps_file%close()
-    
+    call im_file%open(file="examples/FILE:2013-08-11_00")
+    call im_file%read()
+    call im_file%print()
+    call im_file%close()
+
 end program test

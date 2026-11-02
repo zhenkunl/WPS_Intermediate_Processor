@@ -1,4 +1,0 @@
-module wps_intermediate_processor
-  use wps_intermediate_field_mod
-  use wps_intermediate_file_mod
-end module wps_intermediate_processor
