@@ -14,13 +14,15 @@ module wpsim_file_mod
     character(len=MAX_FILENAME_LEN)  :: filename
     character(len=MAX_FILENAME_LEN)  :: prefix
     integer                          :: iunit
+    integer                          :: mode ! 1: read, 2: write
     type(wpsim_record_link), pointer :: record_link
   contains
     private
-    procedure, public, pass(self)   :: open  => open_file
-    procedure, public, pass(self)   :: close => close_file
-    procedure, public, pass(self)   :: read  => read_records
-    procedure, public, pass(self)   :: print => print_records
+    procedure, public, pass(self)   :: open    => open_file
+    procedure, public, pass(self)   :: close   => close_file
+    procedure, public, pass(self)   :: read    => read_records
+    procedure, public, pass(self)   :: print   => print_records
+    procedure, public, pass(self)   :: write   => write_record
     procedure, private, pass(self)  :: release => release_link
   end type wpsim_file
 
@@ -41,6 +43,7 @@ contains
     if (present(file)) then
       self%filename = trim(file)
       action        = 'READ'
+      self%mode     = 1
     else
       if (.not. present(dir) .or. .not. present(date)) then
         error stop "ERROR: Either filename or both dir and date must be provided."
@@ -55,8 +58,9 @@ contains
       else
         self%prefix = 'FILE:'
       end if
-      self%filename = self%dir//"/"//self%prefix//self%hdate
+      self%filename = trim(self%dir)//"/"//trim(self%prefix)//self%hdate
       action        = 'WRITE'
+      self%mode     = 2
     end if
 
     open(newunit=self%iunit, file=self%filename, form='unformatted', action=action, iostat=iostat)
@@ -73,7 +77,8 @@ contains
     class(wpsim_file), intent(inout) :: self
     integer                          :: iostat
 
-    call self%release()
+    if (self%mode == 1) call self%release()
+
     close(unit=self%iunit, iostat=iostat)
     if (iostat /= 0) then
       error stop "ERROR: can not close WPS intermediate format file!"
@@ -131,6 +136,34 @@ contains
     end do
 
   end subroutine print_records
+
+  subroutine write_record(self, proj, field)
+
+    implicit none
+    class(wpsim_file), intent(in)    :: self
+    class(base_proj), intent(in)     :: proj
+    class(wpsim_field), intent(in)   :: field
+
+    type(wpsim_record)               :: record
+    type(wpsim_field2d), allocatable :: field2d(:)
+    integer                          :: iostat
+    integer                          :: field_size
+    integer                          :: i
+
+    select type (field)
+    type is (wpsim_field2d)
+      call record%init(proj, field)
+      call record%write(self%iunit, iostat)
+    type is (wpsim_field3d)
+      field2d = field%tofields()
+      field_size = size(field2d)
+      do i = 1, field_size
+        call record%init(proj, field2d(i))
+        call record%write(self%iunit, iostat)
+      end do
+    end select
+
+  end subroutine write_record
 
   subroutine release_link(self)
 

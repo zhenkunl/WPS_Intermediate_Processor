@@ -4,25 +4,36 @@ module wpsim_field_mod
 
   implicit none
   private
-  public :: wpsim_field, wpsim_record, wpsim_record_link
+  public :: wpsim_field, wpsim_field2d, wpsim_field3d, wpsim_record, wpsim_record_link
 
-  type :: wpsim_field
+  type, abstract :: wpsim_field
     integer                        :: version
     integer                        :: nx
     integer                        :: ny
     real                           :: xfcst
-    real                           :: xlvl
     character(len=9)               :: field
     character(len=24)              :: hdate
     character(len=25)              :: units
     character(len=32)              :: map_source
     character(len=46)              :: desc
-    real, allocatable              :: slab(:, :)
   end type wpsim_field
+
+  type, extends(wpsim_field) :: wpsim_field2d
+    real                           :: xlvl
+    real, allocatable              :: slab(:, :)
+  end type wpsim_field2d
+
+  type, extends(wpsim_field) :: wpsim_field3d
+    integer                        :: nz
+    real,allocatable               :: levels(:)
+    real, allocatable              :: slab(:, :, :)
+  contains
+    procedure, public, pass(self)  :: tofields => to_wpsim_field2d
+  end type wpsim_field3d
 
   type :: wpsim_record
     class(base_proj), allocatable  :: proj
-    type(wpsim_field)              :: field
+    type(wpsim_field2d)            :: field
   contains
     procedure, public, pass(self)  :: init  => init_record
     procedure, public, pass(self)  :: read  => read_record
@@ -36,13 +47,17 @@ module wpsim_field_mod
     type(wpsim_record_link), pointer :: next
   end type wpsim_record_link
 
-  interface wpsim_field
-    module procedure constructor
-  end interface wpsim_field
+  interface wpsim_field2d
+    module procedure wpsim_field2d_constructor
+  end interface wpsim_field2d
+
+  interface wpsim_field3d
+    module procedure wpsim_field3d_constructor
+  end interface wpsim_field3d
 
 contains
 
-  function constructor(field, hdate, slab, xlvl, units, map_source, desc) result(self)
+  function wpsim_field2d_constructor(field, hdate, slab, xlvl, units, map_source, desc) result(self)
 
     implicit none
     character(len=*), intent(in)           :: field
@@ -55,10 +70,12 @@ contains
 
     integer                                :: nx
     integer                                :: ny
-    type(wpsim_field)                      :: self
+    type(wpsim_field2d)                    :: self
 
     nx = size(slab, 1)
     ny = size(slab, 2)
+    allocate(self%slab(nx, ny))
+    self%slab = slab
 
     self%version = VERSION
     self%nx      = nx
@@ -70,7 +87,7 @@ contains
     if (present(map_source)) then
       self%map_source = map_source
     else
-      self%map_source = "WPSIM_PROCESSOR"
+      self%map_source = "WPSIM_IO"
     end if
 
     if (present(xlvl) .and. present(units) .and. present(desc)) then
@@ -134,17 +151,115 @@ contains
         self%units = "K"
         self%desc  = "Daily mean of surface air temperature"
         self%xlvl  = 200100
+      else
+        write(*, *) 'ERROR: unsupported 2-d field: ', trim(field), '!'
       end if
     end if
 
-  end function constructor
+  end function wpsim_field2d_constructor
+
+  function wpsim_field3d_constructor(field, hdate, slab, levels, units, map_source, desc) result(self)
+
+    implicit none
+    character(len=*), intent(in)           :: field
+    character(len=*), intent(in)           :: hdate
+    real, intent(in)                       :: slab(:, :, :)
+    real, intent(in), optional             :: levels(:)
+    character(len=*), intent(in), optional :: units
+    character(len=*), intent(in), optional :: map_source
+    character(len=*), intent(in), optional :: desc
+
+    integer                                :: nx
+    integer                                :: ny
+    integer                                :: nz
+    type(wpsim_field3d)                    :: self
+    integer                                :: i
+
+    nx = size(slab, 1)
+    ny = size(slab, 2)
+    nz = size(slab, 3)
+    allocate(self%slab(nx, ny, nz))
+    self%slab = slab
+
+    self%version = VERSION
+    self%nx      = nx
+    self%ny      = ny
+    self%nz      = nz
+    self%xfcst   = 0.0
+    self%field   = field
+    self%hdate   = hdate
+
+    if (present(map_source)) then
+      self%map_source = map_source
+    else
+      self%map_source = "WPSIM_IO"
+    end if
+
+    if (present(levels)) then
+      self%levels = levels
+    else
+      allocate(self%levels(nz))
+      do i = 1, nz
+        self%levels(i) = real(i)
+      end do
+    end if
+
+    if (present(units) .and. present(desc)) then
+      self%units  = units
+      self%desc   = desc
+    else
+      if (trim(field) == "TT") then
+        self%units = "K"
+        self%desc  = "3-d air temperature"
+      else if (trim(field) == "RH") then
+        self%units = "%"
+        self%desc  = "3-d relative humidity"
+      else if (trim(field) == "SPECHUMD") then
+        self%units = "kg kg-1"
+        self%desc  = "3-d specific humidity"
+      else if (trim(field) == "UU") then
+        self%units = "m s-1"
+        self%desc  = "3-d wind u-component"
+      else if (trim(field) == "VV") then
+        self%units = "m s-1"
+        self%desc  = "3-d wind v-component"
+      else if (trim(field) == "GHT") then
+        self%units = "m"
+        self%desc  = "3-d geopotential height"
+      else if (trim(field) == "PRESSURE") then
+        self%units = "Pa"
+        self%desc  = "3-d pressure"
+      else
+        write(*, *) 'ERROR: unsupported 3-d field: ', trim(field), '!'
+      end if
+    end if
+
+  end function wpsim_field3d_constructor
+
+  function to_wpsim_field2d(self) result(res)
+
+    implicit none
+    class(wpsim_field3d), intent(in)   :: self
+
+    type(wpsim_field2d), allocatable   :: res(:)
+    integer                            :: nz
+    integer                            :: i
+
+    nz = self%nz
+    allocate(res(nz))
+
+    do i = 1, nz
+      res(i) = wpsim_field2d(self%field, self%hdate, self%slab(:, :, i), self%levels(i), self%units, self%map_source, self%desc)
+    end do
+
+  end function to_wpsim_field2d
 
   subroutine init_record(self, proj, field)
 
     implicit none
     class(wpsim_record), intent(inout) :: self
     class(base_proj), intent(in)       :: proj
-    type(wpsim_field), intent(in)      :: field
+    type(wpsim_field2d), intent(in)    :: field
 
     self%proj  = proj
     self%field = field
@@ -158,13 +273,12 @@ contains
     integer, intent(in)                :: iunit
     integer, intent(out)               :: iostat
 
-    class(base_proj), allocatable       :: proj
-    type(wpsim_field)                   :: field
-    type(proj_params)                   :: params
+    class(base_proj), allocatable      :: proj
+    type(wpsim_field2d)                :: field
+    type(proj_params)                  :: params
 
     read(unit=iunit, iostat=iostat) field%version
     if (iostat /= 0) then
-      write(*, *) 'ERROR: can not read format version from WPS intermediate format file!'
       return
     end if
 
@@ -240,7 +354,7 @@ contains
     integer, intent(out)              :: iostat
 
     class(base_proj), allocatable     :: proj
-    type(wpsim_field)                 :: field
+    type(wpsim_field2d)               :: field
 
     proj  = self%proj
     field = self%field
@@ -308,7 +422,7 @@ contains
     character(len=*), intent(inout) :: iomsg     !< IO status message.
 
     class(base_proj), allocatable   :: proj
-    type(wpsim_field)               :: field
+    type(wpsim_field2d)             :: field
 
     proj  = self%proj
     field = self%field
