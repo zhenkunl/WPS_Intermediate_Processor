@@ -4,7 +4,7 @@ module wpsim_field_mod
 
   implicit none
   private
-  public :: wpsim_field, wpsim_field2d, wpsim_field3d, wpsim_record, wpsim_record_link
+  public :: wpsim_field, wpsim_field2d, wpsim_field3d, wpsim_field3d_soil, wpsim_record, wpsim_record_link
 
   type, abstract :: wpsim_field
     integer                        :: version
@@ -25,11 +25,20 @@ module wpsim_field_mod
 
   type, extends(wpsim_field) :: wpsim_field3d
     integer                        :: nz
-    real,allocatable               :: levels(:)
+    real, allocatable              :: levels(:)
     real, allocatable              :: slab(:, :, :)
   contains
-    procedure, public, pass(self)  :: tofields => to_wpsim_field2d
+    procedure, public, pass(self)  :: tofields => field3d_to_field2d
   end type wpsim_field3d
+
+  type, extends(wpsim_field) :: wpsim_field3d_soil
+    real                           :: xlvl
+    integer                        :: nz
+    character(len=9), allocatable  :: name(:)
+    real, allocatable              :: slab(:, :, :)
+  contains
+    procedure, public, pass(self)  :: tofields => field3d_soil_to_field2d
+  end type wpsim_field3d_soil
 
   type :: wpsim_record
     type(wpsim_proj)               :: proj
@@ -54,6 +63,10 @@ module wpsim_field_mod
   interface wpsim_field3d
     module procedure wpsim_field3d_constructor
   end interface wpsim_field3d
+
+  interface wpsim_field3d_soil
+    module procedure wpsim_field3d_soil_constructor
+  end interface wpsim_field3d_soil
 
 contains
 
@@ -236,7 +249,74 @@ contains
 
   end function wpsim_field3d_constructor
 
-  function to_wpsim_field2d(self) result(res)
+  function wpsim_field3d_soil_constructor(field, hdate, slab, layers, units, map_source, desc) result(self)
+
+    implicit none
+    character(len=*), intent(in)           :: field
+    character(len=*), intent(in)           :: hdate
+    real, intent(in)                       :: slab(:, :, :)
+    character(len=*), intent(in)           :: layers(:)
+    character(len=*), intent(in), optional :: units
+    character(len=*), intent(in), optional :: map_source
+    character(len=*), intent(in), optional :: desc
+
+    integer                                :: nx
+    integer                                :: ny
+    integer                                :: nz
+    type(wpsim_field3d_soil)               :: self
+    integer                                :: i
+
+    nx = size(slab, 1)
+    ny = size(slab, 2)
+    nz = size(slab, 3)
+    allocate(self%slab(nx, ny, nz))
+    allocate(self%name(nz))
+    self%slab = slab
+
+    self%version = VERSION
+    self%nx      = nx
+    self%ny      = ny
+    self%nz      = nz
+    self%xfcst   = 0.0
+    self%field   = field
+    self%hdate   = hdate
+
+    do i = 1, nz
+      self%name(i) = trim(self%field)//trim(layers(i))
+    end do
+
+    if (present(map_source)) then
+      self%map_source = map_source
+    else
+      self%map_source = "WPSIM_IO"
+    end if
+
+    self%xlvl = 200100
+
+    if (present(units) .and. present(desc)) then
+      self%units  = units
+      self%desc   = desc
+    else
+      if (trim(field) == "SM") then
+        self%units = "m3 m-3"
+        self%desc  = "Soil moisture "
+      else if (trim(field) == "ST") then
+        self%units = "K"
+        self%desc  = "Soil temperature "
+      else if (trim(field) == "SOILM") then
+        self%units = "kg m-3"
+        self%desc  = "Soil moisture "
+      else if (trim(field) == "SOILT") then
+        self%units = "K"
+        self%desc  = "Soil temperature "
+      else
+        write(*, *) 'ERROR: unsupported soild field: ', trim(field), '!'
+      end if
+    end if
+
+  end function wpsim_field3d_soil_constructor
+
+  function field3d_to_field2d(self) result(res)
 
     implicit none
     class(wpsim_field3d), intent(in)   :: self
@@ -252,7 +332,25 @@ contains
       res(i) = wpsim_field2d(self%field, self%hdate, self%slab(:, :, i), self%levels(i), self%units, self%map_source, self%desc)
     end do
 
-  end function to_wpsim_field2d
+  end function field3d_to_field2d
+
+  function field3d_soil_to_field2d(self) result(res)
+
+    implicit none
+    class(wpsim_field3d_soil), intent(in) :: self
+
+    type(wpsim_field2d), allocatable      :: res(:)
+    integer                               :: nz
+    integer                               :: i
+
+    nz = self%nz
+    allocate(res(nz))
+
+    do i = 1, nz
+      res(i) = wpsim_field2d(self%name(i), self%hdate, self%slab(:, :, i), self%xlvl, self%units, self%map_source, self%desc)
+    end do
+
+  end function field3d_soil_to_field2d
 
   subroutine init_record(self, proj, field)
 

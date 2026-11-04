@@ -202,6 +202,13 @@ contains
         call record%init(proj, field2d(i))
         call record%write(self%iunit, iostat)
       end do
+    type is (wpsim_field3d_soil)
+      field2d = field%tofields()
+      field_size = size(field2d)
+      do i = 1, field_size
+        call record%init(proj, field2d(i))
+        call record%write(self%iunit, iostat)
+      end do
     end select
 
   end subroutine write_record
