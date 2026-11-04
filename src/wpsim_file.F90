@@ -141,7 +141,7 @@ contains
 
     implicit none
     class(wpsim_file), intent(in)    :: self
-    class(base_proj), intent(in)     :: proj
+    type(wpsim_proj), intent(in)     :: proj
     class(wpsim_field), intent(in)   :: field
 
     type(wpsim_record)               :: record

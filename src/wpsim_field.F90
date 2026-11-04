@@ -32,7 +32,7 @@ module wpsim_field_mod
   end type wpsim_field3d
 
   type :: wpsim_record
-    class(base_proj), allocatable  :: proj
+    type(wpsim_proj)               :: proj
     type(wpsim_field2d)            :: field
   contains
     procedure, public, pass(self)  :: init  => init_record
@@ -258,7 +258,7 @@ contains
 
     implicit none
     class(wpsim_record), intent(inout) :: self
-    class(base_proj), intent(in)       :: proj
+    type(wpsim_proj), intent(in)       :: proj
     type(wpsim_field2d), intent(in)    :: field
 
     self%proj  = proj
@@ -273,9 +273,8 @@ contains
     integer, intent(in)                :: iunit
     integer, intent(out)               :: iostat
 
-    class(base_proj), allocatable      :: proj
+    type(wpsim_proj)                   :: proj
     type(wpsim_field2d)                :: field
-    type(proj_params)                  :: params
 
     read(unit=iunit, iostat=iostat) field%version
     if (iostat /= 0) then
@@ -288,48 +287,43 @@ contains
       return
     end if
 
-    read(iunit, iostat=iostat) field%hdate, field%xfcst, field%map_source, field%field,     &
-                               field%units, field%desc, field%xlvl, field%nx, field%ny,     &
-                               params%iproj
+    read(iunit, iostat=iostat) field%hdate, field%xfcst, field%map_source, field%field, &
+                               field%units, field%desc, field%xlvl, field%nx, field%ny, &
+                               proj%iproj
     if (iostat /= 0) then
       write(*, *) 'ERROR: can not read metadata part 1 from WPS intermediate format file!'
       return
     end if
 
-    if (params%iproj == IPROJ_LATLON) then ! Cylindrical equidistant (lat/lon)
-      allocate(latlon_proj :: proj)
-      read(iunit, iostat=iostat) params%startloc, params%startlat, params%startlon,         &
-                                 params%deltalat, params%deltalon, params%earth_radius
-    else if (params%iproj == IPROJ_MERCATOR) then ! Mercator
-      allocate(mercator_proj :: proj)
-      read(iunit, iostat=iostat) params%startloc, params%startlat, params%startlon,         &
-                                 params%dx, params%dy, params%truelat1, params%earth_radius
-    else if (params%iproj == IPROJ_LAMBERT_CONFORMAL) then ! Lambert conformal
-      allocate(lambert_proj :: proj)
-      read(iunit, iostat=iostat) params%startloc, params%startlat, params%startlon,         &
-                                 params%dx, params%dy, params%xlonc, params%truelat1,       &
-                                 params%truelat2, params%earth_radius
-    else if (params%iproj == IPROJ_GAUSSIAN) then ! Gaussian
-      allocate(gaussian_proj :: proj)
-      read(iunit, iostat=iostat) params%startloc, params%startlat, params%startlon,         &
-                                 params%nlats, params%deltalon, params%earth_radius
-    else if (params%iproj == IPROJ_POLAR_STEREOGRAPHIC) then ! Polar stereographic
-      allocate(stereographic_proj :: proj)
-      read(iunit, iostat=iostat) params%startloc, params%startlat, params%startlon,         &
-                                 params%xlonc, params%truelat1, params%earth_radius
+    if (proj%iproj == IPROJ_LATLON) then ! Cylindrical equidistant (lat/lon)
+      read(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,           &
+                                 proj%deltalat, proj%deltalon, proj%earth_radius
+    else if (proj%iproj == IPROJ_MERCATOR) then ! Mercator
+      read(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,           &
+                                 proj%dx, proj%dy, proj%truelat1, proj%earth_radius
+    else if (proj%iproj == IPROJ_LAMBERT_CONFORMAL) then ! Lambert conformal
+      read(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,           &
+                                 proj%dx, proj%dy, proj%xlonc, proj%truelat1,           &
+                                 proj%truelat2, proj%earth_radius
+    else if (proj%iproj == IPROJ_GAUSSIAN) then ! Gaussian
+      read(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,           &
+                                 proj%nlats, proj%deltalon, proj%earth_radius
+    else if (proj%iproj == IPROJ_POLAR_STEREOGRAPHIC) then ! Polar stereographic
+      read(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,           &
+                                 proj%xlonc, proj%truelat1, proj%earth_radius
+    else
+      write(*, *) 'ERROR: unsupported map projection ', proj%iproj, '!'
     end if
     if (iostat /= 0) then
       write(*, *) 'ERROR: can not read metadata part 2 from WPS intermediate format file!'
       return
     end if
 
-    read(iunit, iostat=iostat) params%is_wind_grid_rel
+    read(iunit, iostat=iostat) proj%is_wind_grid_rel
     if (iostat /= 0) then
       write(*, *) 'ERROR: can not read wind rotation flag from WPS intermediate format file!'
       return
     end if
-
-    call proj%init(params)
 
     if (.not. allocated(field%slab)) then
       allocate(field%slab(field%nx, field%ny))
@@ -349,12 +343,12 @@ contains
   subroutine write_record(self, iunit, iostat)
 
     implicit none
-    class(wpsim_record), intent(in)   :: self
-    integer, intent(in)               :: iunit
-    integer, intent(out)              :: iostat
+    class(wpsim_record), intent(in)    :: self
+    integer, intent(in)                :: iunit
+    integer, intent(out)               :: iostat
 
-    class(base_proj), allocatable     :: proj
-    type(wpsim_field2d)               :: field
+    type(wpsim_proj)                   :: proj
+    type(wpsim_field2d)                :: field
 
     proj  = self%proj
     field = self%field
@@ -373,24 +367,25 @@ contains
       return
     end if
 
-    select type (proj)
-    type is (latlon_proj) ! Cylindrical equidistant (lat/lon)
+    if (proj%iproj == IPROJ_LATLON) then ! Cylindrical equidistant (lat/lon)
       write(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,       &
                                   proj%deltalat, proj%deltalon, proj%earth_radius
-    type is (mercator_proj) ! Mercator
+    else if (proj%iproj == IPROJ_MERCATOR) then ! Mercator
       write(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,       &
                                   proj%dx, proj%dy, proj%truelat1, proj%earth_radius
-    type is (lambert_proj) ! Lambert conformal
+    else if (proj%iproj == IPROJ_LAMBERT_CONFORMAL) then ! Lambert conformal
       write(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,       &
                                   proj%dx, proj%dy, proj%xlonc, proj%truelat1,       &
                                   proj%truelat2, proj%earth_radius
-    type is (gaussian_proj) ! Gaussian
+    else if (proj%iproj == IPROJ_GAUSSIAN) then ! Gaussian
       write(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,       &
                                   proj%nlats, proj%deltalon, proj%earth_radius
-    type is (stereographic_proj) ! Polar stereographic
+    else if (proj%iproj == IPROJ_POLAR_STEREOGRAPHIC) then ! Polar stereographic
       write(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,       &
                                   proj%xlonc, proj%truelat1, proj%earth_radius
-    end select
+    else
+      write(*, *) 'ERROR: unsupported map projection ', proj%iproj, '!'
+    end if
     if (iostat /= 0) then
       write(*, *) 'ERROR: can not write metadata part 2 to WPS intermediate format file!'
       return
@@ -421,7 +416,7 @@ contains
     integer, intent(out)            :: iostat    !< IO status code.
     character(len=*), intent(inout) :: iomsg     !< IO status message.
 
-    class(base_proj), allocatable   :: proj
+    type(wpsim_proj)                :: proj
     type(wpsim_field2d)             :: field
 
     proj  = self%proj
@@ -434,19 +429,18 @@ contains
     write(unit, *, iostat=iostat) ' SOURCE = ', trim(field%map_source), new_line('A')
     write(unit, *, iostat=iostat) ' LEVEL = ', field%xlvl, new_line('A')
     write(unit, *, iostat=iostat) ' I,J DIMS = ', field%nx, field%ny, new_line('A')
-    select type (proj)
-    type is (latlon_proj) ! Cylindrical equidistant (lat/lon)
+    if (proj%iproj == IPROJ_LATLON) then ! Cylindrical equidistant (lat/lon)
       write(unit, *, iostat=iostat) ' IPROJ = ', proj%iproj, ' PROJECTION = LAT LON', new_line('A')
       write(unit, *, iostat=iostat) '   REF_X, REF_Y = ', 1.0, 1.0, new_line('A')
       write(unit, *, iostat=iostat) '   REF_LAT, REF_LON = ', proj%startlat, proj%startlon, new_line('A')
       write(unit, *, iostat=iostat) '   DLAT, DLON = ', proj%deltalat, proj%deltalon, new_line('A')
-    type is (mercator_proj) ! Mercator
+    else if (proj%iproj == IPROJ_MERCATOR) then ! Mercator
       write(unit, *, iostat=iostat) ' IPROJ = ', proj%iproj, ' PROJECTION = MERCATOR', new_line('A')
       write(unit, *, iostat=iostat) '   REF_X, REF_Y = ', 1.0, 1.0, new_line('A')
       write(unit, *, iostat=iostat) '   REF_LAT, REF_LON = ', proj%startlat, proj%startlon, new_line('A')
       write(unit, *, iostat=iostat) '   DX, DY = ', proj%dx, proj%dy, new_line('A')
       write(unit, *, iostat=iostat) '   TRUELAT1 = ', proj%truelat1, new_line('A')
-    type is (lambert_proj) ! Lambert conformal
+    else if (proj%iproj == IPROJ_LAMBERT_CONFORMAL) then ! Lambert conformal
       write(unit, *, iostat=iostat) ' IPROJ = ', proj%iproj, ' PROJECTION = LAMBERT', new_line('A')
       write(unit, *, iostat=iostat) '   REF_X, REF_Y = ', 1.0, 1.0, new_line('A')
       write(unit, *, iostat=iostat) '   REF_LAT, REF_LON = ', proj%startlat, proj%startlon, new_line('A')
@@ -454,18 +448,18 @@ contains
       write(unit, *, iostat=iostat) '   XLONC = ', proj%xlonc, new_line('A')
       write(unit, *, iostat=iostat) '   TRUELAT1 = ', proj%truelat1, new_line('A')
       write(unit, *, iostat=iostat) '   TRUELAT2 = ', proj%truelat2, new_line('A')
-    type is (gaussian_proj) ! Gaussian
+    else if (proj%iproj == IPROJ_GAUSSIAN) then ! Gaussian
       write(unit, *, iostat=iostat) ' IPROJ = ', proj%iproj, ' PROJECTION = GAUSSIAN', new_line('A')
       write(unit, *, iostat=iostat) '   REF_X, REF_Y = ', 1.0, 1.0, new_line('A')
       write(unit, *, iostat=iostat) '   REF_LAT, REF_LON = ', proj%startlat, proj%startlon, new_line('A')
       write(unit, *, iostat=iostat) '   NLATS = ', proj%nlats, new_line('A')
-    type is (stereographic_proj) ! Polar stereographic
+    else if (proj%iproj == IPROJ_POLAR_STEREOGRAPHIC) then ! Polar stereographic
       write(unit, *, iostat=iostat) ' IPROJ = ', proj%iproj, ' PROJECTION = POLAR STEREOGRAPHIC', new_line('A')
       write(unit, *, iostat=iostat) '   REF_X, REF_Y = ', 1.0, 1.0, new_line('A')
       write(unit, *, iostat=iostat) '   REF_LAT, REF_LON = ', proj%startlat, proj%startlon, new_line('A')
       write(unit, *, iostat=iostat) '   XLONC = ', proj%xlonc, new_line('A')
       write(unit, *, iostat=iostat) '   TRUELAT1 = ', proj%truelat1, new_line('A')
-    end select
+    end if
     write(unit, *, iostat=iostat) '   EARTH_RADIUS = ', proj%earth_radius, new_line('A')
     write(unit, *, iostat=iostat) ' DATA(1,1) = ', field%slab(1, 1), new_line('A')
 
