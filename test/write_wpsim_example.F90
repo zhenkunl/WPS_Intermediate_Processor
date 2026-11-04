@@ -17,7 +17,7 @@ program write_wpsim_example
 
     proj = wpsim_proj(iproj=0, startlat=90.0, startlon=0.0, deltalat=-1.0, deltalon=1.0)
 
-    call im_file%open(dir='./', date=date)
+    call im_file%create(dir='./', date=date)
     field2d = wpsim_field2d("UU", date, a)
     field3d = wpsim_field3d("GHT", date, b, levels)
     call im_file%write(proj, field2d)
