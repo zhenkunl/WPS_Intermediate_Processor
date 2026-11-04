@@ -28,7 +28,8 @@ module wpsim_projection
 
 contains
 
-  function constructor(iproj, startlat, startlon, nlats, deltalat, deltalon, dx, dy, xlonc, truelat1, truelat2, earth_rad, is_wind_grid_rel, startloc) result(proj)
+  function constructor(iproj, startlat, startlon, nlats, deltalat, deltalon, dx, dy, xlonc, truelat1, truelat2, &
+                       earth_rad, is_wind_grid_rel, startloc) result(proj)
 
     implicit none
     integer, intent(in)                    :: iproj
