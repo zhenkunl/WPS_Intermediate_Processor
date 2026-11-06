@@ -18,18 +18,18 @@ endif()
 
 add_library(wpsim_io STATIC
     src/wpsim_constants.F90
-    src/wpsim_field.F90
-    src/wpsim_file.F90
+    src/wpsim_fields.F90
+    src/wpsim_files.F90
     src/wpsim_io.F90
     src/wpsim_projection.F90
 )
 
 target_include_directories(wpsim_io PUBLIC ${CMAKE_Fortran_MODULE_DIRECTORY})
 
-add_executable(read_wpsim_example  test/read_wpsim_example.F90)
+add_executable(read_wpsim_example  examples/read_wpsim_example.F90)
 target_link_libraries(read_wpsim_example  PRIVATE wpsim_io)
 
-add_executable(write_wpsim_example test/write_wpsim_example.F90)
+add_executable(write_wpsim_example examples/write_wpsim_example.F90)
 target_link_libraries(write_wpsim_example PRIVATE wpsim_io)
 
 enable_testing()

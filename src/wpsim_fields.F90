@@ -1,12 +1,18 @@
-module wpsim_field_mod
+module wpsim_fields
   use wpsim_constants
   use wpsim_projection
 
   implicit none
   private
-  public :: wpsim_field, wpsim_field2d, wpsim_field3d, wpsim_field3d_soil, wpsim_record, wpsim_record_link
+  public :: wpsim_field
+  public :: wpsim_field2d
+  public :: wpsim_field3d
+  public :: wpsim_field3d_soil
+  public :: wpsim_record
+  public :: wpsim_record_link
 
   type, abstract :: wpsim_field
+    private
     integer                        :: version
     integer                        :: nx
     integer                        :: ny
@@ -19,11 +25,13 @@ module wpsim_field_mod
   end type wpsim_field
 
   type, extends(wpsim_field) :: wpsim_field2d
+    private
     real                           :: xlvl
     real, allocatable              :: slab(:, :)
   end type wpsim_field2d
 
   type, extends(wpsim_field) :: wpsim_field3d
+    private
     integer                        :: nz
     real, allocatable              :: levels(:)
     real, allocatable              :: slab(:, :, :)
@@ -32,6 +40,7 @@ module wpsim_field_mod
   end type wpsim_field3d
 
   type, extends(wpsim_field) :: wpsim_field3d_soil
+    private
     real                           :: xlvl
     integer                        :: nz
     character(len=9), allocatable  :: name(:)
@@ -41,6 +50,7 @@ module wpsim_field_mod
   end type wpsim_field3d_soil
 
   type :: wpsim_record
+    private
     type(wpsim_proj)               :: proj
     type(wpsim_field2d)            :: field
   contains
@@ -160,12 +170,16 @@ contains
         self%units = "kg m-2"
         self%desc  = "Water equivalent of Accum snow depth"
         self%xlvl  = 200100
+      else if (trim(field) == "SNOWH") then
+        self%units = "kg m-2"
+        self%desc  = "Physical Snow Depth"
+        self%xlvl  = 200100
       else if (trim(field) == "TAVGSFC") then
         self%units = "K"
         self%desc  = "Daily mean of surface air temperature"
         self%xlvl  = 200100
       else
-        write(*, *) 'ERROR: unsupported 2-d field: ', trim(field), '!'
+        error stop 'ERROR: unsupported 2-d field: '//trim(field)//'!'
       end if
     end if
 
@@ -236,14 +250,14 @@ contains
       else if (trim(field) == "VV") then
         self%units = "m s-1"
         self%desc  = "3-d wind v-component"
-      else if (trim(field) == "GHT") then
+      else if (trim(field) == "HGT") then
         self%units = "m"
         self%desc  = "3-d geopotential height"
       else if (trim(field) == "PRESSURE") then
         self%units = "Pa"
         self%desc  = "3-d pressure"
       else
-        write(*, *) 'ERROR: unsupported 3-d field: ', trim(field), '!'
+        error stop 'ERROR: unsupported 3-d field: '//trim(field)//'!'
       end if
     end if
 
@@ -310,7 +324,7 @@ contains
         self%units = "K"
         self%desc  = "Soil temperature "
       else
-        write(*, *) 'ERROR: unsupported soild field: ', trim(field), '!'
+        error stop 'ERROR: unsupported soild field: '//trim(field)//'!'
       end if
     end if
 
@@ -380,17 +394,14 @@ contains
     end if
 
     if (field%version /= VERSION) then
-      write(*, *) 'ERROR: unsupported WPS intermediate format version ', field%version, '!'
-      iostat = 1
-      return
+      error stop 'ERROR: unsupported WPS intermediate format version !'
     end if
 
     read(iunit, iostat=iostat) field%hdate, field%xfcst, field%map_source, field%field, &
                                field%units, field%desc, field%xlvl, field%nx, field%ny, &
                                proj%iproj
     if (iostat /= 0) then
-      write(*, *) 'ERROR: can not read metadata part 1 from WPS intermediate format file!'
-      return
+      error stop 'ERROR: can not read metadata from WPS intermediate format file!'
     end if
 
     if (proj%iproj == IPROJ_LATLON) then ! Cylindrical equidistant (lat/lon)
@@ -410,17 +421,15 @@ contains
       read(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,           &
                                  proj%xlonc, proj%truelat1, proj%earth_radius
     else
-      write(*, *) 'ERROR: unsupported map projection ', proj%iproj, '!'
+      error stop 'ERROR: unsupported map projection !'
     end if
     if (iostat /= 0) then
-      write(*, *) 'ERROR: can not read metadata part 2 from WPS intermediate format file!'
-      return
+      error stop 'ERROR: can not read map projection from WPS intermediate format file!'
     end if
 
     read(iunit, iostat=iostat) proj%is_wind_grid_rel
     if (iostat /= 0) then
-      write(*, *) 'ERROR: can not read wind rotation flag from WPS intermediate format file!'
-      return
+      error stop 'ERROR: can not read wind rotation flag from WPS intermediate format file!'
     end if
 
     if (.not. allocated(field%slab)) then
@@ -430,39 +439,36 @@ contains
     ! Read 2-d array of data
     read(iunit, iostat=iostat) field%slab
     if (iostat /= 0) then
-      write(*, *) 'ERROR: can not read slab data from WPS intermediate format file!'
-      return
+      error stop 'ERROR: can not read slab data from WPS intermediate format file!'
     end if
 
     call self%init(proj, field)
 
   end subroutine read_record
 
-  subroutine write_record(self, iunit, iostat)
+  subroutine write_record(self, iunit)
 
     implicit none
     class(wpsim_record), intent(in)    :: self
     integer, intent(in)                :: iunit
-    integer, intent(out)               :: iostat
-
+    
     type(wpsim_proj)                   :: proj
     type(wpsim_field2d)                :: field
+    integer                            :: iostat
 
     proj  = self%proj
     field = self%field
 
     write(unit=iunit, iostat=iostat) field%version
     if (iostat /= 0) then
-      write(*, *) 'ERROR: can not write format version to WPS intermediate format file!'
-      return
+      error stop 'ERROR: can not write format version to WPS intermediate format file!'
     endif
 
     write(iunit, iostat=iostat) field%hdate, field%xfcst, field%map_source, field%field, &
                                 field%units, field%desc, field%xlvl, field%nx, field%ny, &
                                 proj%iproj
     if (iostat /= 0) then
-      write(*, *) 'ERROR: can not write metadata part 1 to WPS intermediate format file!'
-      return
+      error stop 'ERROR: can not write metadata to WPS intermediate format file!'
     end if
 
     if (proj%iproj == IPROJ_LATLON) then ! Cylindrical equidistant (lat/lon)
@@ -482,24 +488,21 @@ contains
       write(iunit, iostat=iostat) proj%startloc, proj%startlat, proj%startlon,       &
                                   proj%xlonc, proj%truelat1, proj%earth_radius
     else
-      write(*, *) 'ERROR: unsupported map projection ', proj%iproj, '!'
+      error stop 'ERROR: unsupported map projection!'
     end if
     if (iostat /= 0) then
-      write(*, *) 'ERROR: can not write metadata part 2 to WPS intermediate format file!'
-      return
+      error stop 'ERROR: can not write map projection to WPS intermediate format file!'
     end if
 
     write(iunit, iostat=iostat) proj%is_wind_grid_rel
     if (iostat /= 0) then
-      write(*, *) 'ERROR: can not write wind rotation flag to WPS intermediate format file!'
-      return
+      error stop 'ERROR: can not write wind rotation flag to WPS intermediate format file!'
     end if
 
     ! Write 2-d array of data
     write(iunit, iostat=iostat) field%slab
     if (iostat /= 0) then
-      write(*, *) 'ERROR: can not write slab data to WPS intermediate format file!'
-      return
+      error stop 'ERROR: can not write slab data to WPS intermediate format file!'
     end if
 
   end subroutine write_record
@@ -563,4 +566,4 @@ contains
 
   end subroutine write_formatted
 
-end module wpsim_field_mod
+end module wpsim_fields

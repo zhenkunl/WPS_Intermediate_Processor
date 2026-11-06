@@ -1,6 +1,6 @@
 module wpsim_io
   use wpsim_constants
   use wpsim_projection
-  use wpsim_field_mod
-  use wpsim_file_mod
+  use wpsim_fields
+  use wpsim_files
 end module wpsim_io

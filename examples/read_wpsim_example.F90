@@ -4,7 +4,7 @@ program read_wpsim_example
 
     type(wpsim_file)    :: im_file
 
-    call im_file%open(file="examples/FILE:2013-08-11_00")
+    call im_file%open(file="data/FILE:2013-08-11_00")
     call im_file%read()
     call im_file%print()
     call im_file%close()

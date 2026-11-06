@@ -1,7 +1,7 @@
-module wpsim_file_mod
+module wpsim_files
   use wpsim_constants
   use wpsim_projection
-  use wpsim_field_mod
+  use wpsim_fields
 
   implicit none
   private
@@ -17,14 +17,13 @@ module wpsim_file_mod
     integer                          :: mode ! 1: read, 2: write
     type(wpsim_record_link), pointer :: record_link
   contains
-    private
-    procedure, public, pass(self)   :: create  => create_file
-    procedure, public, pass(self)   :: open    => open_file
-    procedure, public, pass(self)   :: close   => close_file
-    procedure, public, pass(self)   :: read    => read_records
-    procedure, public, pass(self)   :: print   => print_records
-    procedure, public, pass(self)   :: write   => write_record
-    procedure, private, pass(self)  :: release => release_link
+    procedure, public, pass(self)    :: create  => create_file
+    procedure, public, pass(self)    :: open    => open_file
+    procedure, public, pass(self)    :: close   => close_file
+    procedure, public, pass(self)    :: read    => read_records
+    procedure, public, pass(self)    :: print   => print_records
+    procedure, public, pass(self)    :: write   => write_records
+    procedure, private, pass(self)   :: release => release_link
   end type wpsim_file
 
 contains
@@ -44,7 +43,7 @@ contains
       self%filename = trim(file)
     else
       if (.not. present(dir) .or. .not. present(date)) then
-        error stop "ERROR: Either filename or both dir and date must be provided."
+        error stop "ERROR: either filename or both dir and date must be provided."
       end if
       self%dir   = trim(dir)
       self%hdate = trim(date)
@@ -107,7 +106,6 @@ contains
     open(newunit=self%iunit, file=self%filename, form='unformatted', action='read', iostat=iostat)
     if (iostat /= 0) then
       error stop "ERROR: can not open WPS intermediate format file!"
-      return
     end if
 
   end subroutine open_file
@@ -116,6 +114,7 @@ contains
 
     implicit none
     class(wpsim_file), intent(inout) :: self
+
     integer                          :: iostat
 
     if (self%mode == 1) call self%release()
@@ -123,7 +122,6 @@ contains
     close(unit=self%iunit, iostat=iostat)
     if (iostat /= 0) then
       error stop "ERROR: can not close WPS intermediate format file!"
-      return
     end if
 
   end subroutine close_file
@@ -178,7 +176,7 @@ contains
 
   end subroutine print_records
 
-  subroutine write_record(self, proj, field)
+  subroutine write_records(self, proj, field)
 
     implicit none
     class(wpsim_file), intent(in)    :: self
@@ -187,31 +185,30 @@ contains
 
     type(wpsim_record)               :: record
     type(wpsim_field2d), allocatable :: field2d(:)
-    integer                          :: iostat
     integer                          :: field_size
     integer                          :: i
 
     select type (field)
     type is (wpsim_field2d)
       call record%init(proj, field)
-      call record%write(self%iunit, iostat)
+      call record%write(self%iunit)
     type is (wpsim_field3d)
       field2d = field%tofields()
       field_size = size(field2d)
       do i = 1, field_size
         call record%init(proj, field2d(i))
-        call record%write(self%iunit, iostat)
+        call record%write(self%iunit)
       end do
     type is (wpsim_field3d_soil)
       field2d = field%tofields()
       field_size = size(field2d)
       do i = 1, field_size
         call record%init(proj, field2d(i))
-        call record%write(self%iunit, iostat)
+        call record%write(self%iunit)
       end do
     end select
 
-  end subroutine write_record
+  end subroutine write_records
 
   subroutine release_link(self)
 
@@ -229,4 +226,4 @@ contains
 
   end subroutine release_link
 
-end module wpsim_file_mod
+end module wpsim_files
